@@ -1,116 +1,81 @@
 const http = require('http');
 const { spawn } = require('child_process');
-const WebSocket = require('ws');
 
+// Keep ONE source of truth for the application server. server.js already owns
+// the Tala connection, market cache, admin API and storefront. The previous
+// wrapper opened a second Tala socket and intercepted /api/market, returning
+// 503 whenever its own socket had not received a message yet. That made the
+// browser show «دریافت قیمت زنده از طلا موقتاً ممکن نشد» even when server.js
+// had a valid market cache/fallback and was also making the live connection
+// harder to diagnose.
 const PUBLIC_PORT = Number(process.env.PORT || 3000);
 const APP_PORT = PUBLIC_PORT + 1;
-const TALA_URLS = [process.env.TALA_WS_URL || 'wss://web1.tala.ir/ws/'];
 
-let liveMarket = null;
-let lastLiveAt = 0;
-let socket = null;
-let reconnectTimer = null;
-let pingTimer = null;
-let lastError = null;
-let messages = 0;
+const child = spawn(process.execPath, ['server.js'], {
+  env: { ...process.env, PORT: String(APP_PORT) },
+  stdio: 'inherit'
+});
 
-const keys = {
-  gram18: ['geram18','gram18'], gram24: ['geram24','gram24'], gram21: ['geram21','gram21'], gram22: ['geram22','gram22'],
-  gram735: ['geram735','gram735'], gram740: ['geram740','gram740'], gram995: ['geram995','gram995'], gram999: ['geram999','gram999'],
-  usd: ['usd'], eur: ['eur'], gbp: ['gbp'], aed: ['aed'], cad: ['cad','CAD','dollarCanada','canadaDollar'],
-  chf: ['chf'], cny: ['cny'], pkr: ['pkr'], omr: ['omr'], try: ['try','TRY'], thb: ['thb'],
-  btcUsd: ['BTC_USDT','btcUsd'], ethUsd: ['ETH_USDT','ethUsd'], usdtIrt: ['USDT_IRT','usdtIrt'],
-  ounceUsd: ['ounce','ounceUsd'], brentUsd: ['ENERGY_BRENT','brentUsd'], bazartehran: ['bazartehran'],
-  mazanehJahani: ['mazaneh-jahani','mazanehJahani'], mazanehDubai: ['mazaneh-dubai','mazanehDubai'],
-  emami: ['sekkejad','emami'], oldCoin: ['sekkegad','oldCoin'], half: ['sekkenim','half'],
-  quarter: ['sekkerob','quarter'], gerami: ['sekkegrm','gerami'], coinValue: ['sekke-arzesh','coinValue'],
-  coinBubble: ['sekke-hobab','coinBubble']
-};
+child.on('exit', code => {
+  if (code !== 0) process.exit(code || 1);
+});
 
-function num(v){
-  if(v === null || v === undefined || v === '') return null;
-  const s = String(v).replace(/,/g,'').replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
+const proxy = http.createServer((req, res) => {
+  const upstream = http.request({
+    hostname: '127.0.0.1',
+    port: APP_PORT,
+    path: req.url,
+    method: req.method,
+    headers: { ...req.headers, host: `127.0.0.1:${APP_PORT}` }
+  }, r => {
+    const isHtml = String(r.headers['content-type'] || '').includes('text/html');
 
-function walk(value, out){
-  if(!value || typeof value !== 'object') return;
-  if(Array.isArray(value)){ for(const x of value) walk(x,out); return; }
-  for(const [k,v] of Object.entries(value)){
-    if(v && typeof v === 'object' && !Array.isArray(v) && 'value' in v){
-      const n = num(v.value); if(n !== null) out[k] = n;
-    } else {
-      const n = num(v); if(n !== null) out[k] = n;
+    if (!isHtml) {
+      res.writeHead(r.statusCode, r.headers);
+      r.pipe(res);
+      return;
     }
-    if(v && typeof v === 'object') walk(v,out);
-  }
-}
 
-function normalize(payload){
-  const raw = {}; walk(payload, raw); const out = {};
-  for(const [target, aliases] of Object.entries(keys)){
-    for(const alias of aliases){
-      if(raw[alias] !== undefined){ out[target] = raw[alias]; break; }
-      const hit = Object.keys(raw).find(k => k.toLowerCase() === alias.toLowerCase());
-      if(hit){ out[target] = raw[hit]; break; }
-    }
-  }
-  return out;
-}
+    const chunks = [];
+    r.on('data', c => chunks.push(c));
+    r.on('end', () => {
+      let html = Buffer.concat(chunks).toString('utf8');
 
-function clearPing(){ clearInterval(pingTimer); pingTimer = null; }
-function connect(){
-  clearTimeout(reconnectTimer); clearPing(); const url = TALA_URLS[0];
-  try{
-    if(socket) socket.close();
-    socket = new WebSocket(url, { headers:{Origin:'https://www.tala.ir','User-Agent':'Mozilla/5.0 NavabGold/1.0'} });
-    socket.on('open',()=>{
-      lastError=null; console.log('[TALA LIVE] connected',url);
-      pingTimer=setInterval(()=>{try{if(socket&&socket.readyState===WebSocket.OPEN)socket.ping();}catch{}},20000);
-    });
-    socket.on('message',raw=>{
-      messages++; let msg; try{msg=JSON.parse(raw.toString());}catch{return;}
-      const normalized=normalize(msg);
-      if(Object.keys(normalized).length){liveMarket={...(liveMarket||{}),...normalized};lastLiveAt=Date.now();lastError=null;}
-    });
-    socket.on('error',e=>{lastError=e.message||'Tala WebSocket error';});
-    socket.on('close',()=>{clearPing();socket=null;reconnectTimer=setTimeout(connect,2500);});
-  }catch(e){clearPing();lastError=e.message||'Tala WebSocket connection failed';reconnectTimer=setTimeout(connect,2500);}
-}
-connect();
-
-function sendMarket(res){
-  const fresh=!!liveMarket&&(Date.now()-lastLiveAt<90000);
-  if(!fresh){
-    res.writeHead(503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
-    return res.end(JSON.stringify({ok:false,live:false,source:'Tala.ir WebSocket',updatedAt:lastLiveAt||null,error:lastError||'دریافت قیمت زنده از طلا موقتاً ممکن نشد.'}));
-  }
-  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
-  res.end(JSON.stringify({ok:true,live:true,source:'Tala.ir WebSocket',updatedAt:lastLiveAt,market:liveMarket}));
-}
-
-const child=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:String(APP_PORT)},stdio:'inherit'});
-child.on('exit',code=>{if(code!==0)process.exit(code||1);});
-
-const proxy=http.createServer((req,res)=>{
-  if(req.url&&req.url.startsWith('/api/market'))return sendMarket(res);
-  const upstream=http.request({hostname:'127.0.0.1',port:APP_PORT,path:req.url,method:req.method,headers:{...req.headers,host:`127.0.0.1:${APP_PORT}`}},r=>{
-    const isHtml=String(r.headers['content-type']||'').includes('text/html');
-    if(!isHtml){res.writeHead(r.statusCode,r.headers);r.pipe(res);return;}
-    const chunks=[];r.on('data',c=>chunks.push(c));r.on('end',()=>{
-      let html=Buffer.concat(chunks).toString('utf8');
-      // Keep the original main storefront layout. Only add the compact live-price strip.
-      const isStorefront=req.url==='/'||req.url?.split('?')[0]==='/index.html';
-      if(isStorefront&&html.includes('</body>')&&!html.includes('/market-strip.js')){
-        html=html.replace('</body>','<script src="/market-strip.js?v=20260822" defer></script></body>');
+      // Only enhance the public main storefront. Admin and preview pages are
+      // left untouched so the experimental UI stays isolated.
+      const pathname = String(req.url || '').split('?')[0];
+      const isStorefront = pathname === '/' || pathname === '/index.html';
+      if (isStorefront && html.includes('</body>') && !html.includes('/market-strip.js')) {
+        html = html.replace(
+          '</body>',
+          '<script src="/market-strip.js?v=20260822-2" defer></script></body>'
+        );
       }
-      const headers={...r.headers,'content-length':Buffer.byteLength(html)};delete headers['content-encoding'];
-      res.writeHead(r.statusCode,headers);res.end(html);
+
+      const headers = { ...r.headers, 'content-length': Buffer.byteLength(html) };
+      delete headers['content-encoding'];
+      res.writeHead(r.statusCode, headers);
+      res.end(html);
     });
   });
-  upstream.on('error',()=>{if(!res.headersSent){res.writeHead(502);res.end('Bad gateway');}});req.pipe(upstream);
+
+  upstream.on('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Bad gateway');
+    }
+  });
+
+  req.pipe(upstream);
 });
-proxy.listen(PUBLIC_PORT,'0.0.0.0',()=>console.log('[NAVAB] live market proxy listening on',PUBLIC_PORT));
-process.on('SIGTERM',()=>{try{child.kill('SIGTERM');}catch{};try{socket?.close();}catch{};process.exit(0);});
-process.on('SIGINT',()=>{try{child.kill('SIGINT');}catch{};try{socket?.close();}catch{};process.exit(0);});
+
+proxy.listen(PUBLIC_PORT, '0.0.0.0', () => {
+  console.log('[NAVAB] proxy listening on', PUBLIC_PORT, '-> app', APP_PORT);
+});
+
+function shutdown() {
+  try { child.kill('SIGTERM'); } catch {}
+  process.exit(0);
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
