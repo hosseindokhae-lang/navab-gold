@@ -1,13 +1,8 @@
 const http = require('http');
 const { spawn } = require('child_process');
 
-// Keep ONE source of truth for the application server. server.js already owns
-// the Tala connection, market cache, admin API and storefront. The previous
-// wrapper opened a second Tala socket and intercepted /api/market, returning
-// 503 whenever its own socket had not received a message yet. That made the
-// browser show «دریافت قیمت زنده از طلا موقتاً ممکن نشد» even when server.js
-// had a valid market cache/fallback and was also making the live connection
-// harder to diagnose.
+// Keep ONE source of truth for the application server. server.js owns the
+// Tala connection, market cache, admin API and storefront.
 const PUBLIC_PORT = Number(process.env.PORT || 3000);
 const APP_PORT = PUBLIC_PORT + 1;
 
@@ -41,15 +36,22 @@ const proxy = http.createServer((req, res) => {
     r.on('end', () => {
       let html = Buffer.concat(chunks).toString('utf8');
 
-      // Only enhance the public main storefront. Admin and preview pages are
-      // left untouched so the experimental UI stays isolated.
+      // Only enhance the public main storefront. Admin and preview pages stay untouched.
       const pathname = String(req.url || '').split('?')[0];
       const isStorefront = pathname === '/' || pathname === '/index.html';
-      if (isStorefront && html.includes('</body>') && !html.includes('/market-strip.js')) {
-        html = html.replace(
-          '</body>',
-          '<script src="/market-strip.js?v=20260822-2" defer></script></body>'
-        );
+      if (isStorefront && html.includes('</body>')) {
+        if (!html.includes('/market-strip.js')) {
+          html = html.replace(
+            '</body>',
+            '<script src="/market-strip.js?v=20260822-3" defer></script></body>'
+          );
+        }
+        if (!html.includes('/category-strip.js')) {
+          html = html.replace(
+            '</body>',
+            '<script src="/category-strip.js?v=20260822-1" defer></script></body>'
+          );
+        }
       }
 
       const headers = { ...r.headers, 'content-length': Buffer.byteLength(html) };
