@@ -14,9 +14,6 @@ let pingTimer = null;
 let lastError = null;
 let messages = 0;
 
-// Keep the full set of market fields exposed by server.js. The live proxy
-// previously exposed only a small subset, which is why CAD and other prices
-// disappeared on production even though the backend knew about them.
 const keys = {
   gram18: ['geram18','gram18'], gram24: ['geram24','gram24'], gram21: ['geram21','gram21'], gram22: ['geram22','gram22'],
   gram735: ['geram735','gram735'], gram740: ['geram740','gram740'], gram995: ['geram995','gram995'], gram999: ['geram999','gram999'],
@@ -42,20 +39,16 @@ function walk(value, out){
   if(Array.isArray(value)){ for(const x of value) walk(x,out); return; }
   for(const [k,v] of Object.entries(value)){
     if(v && typeof v === 'object' && !Array.isArray(v) && 'value' in v){
-      const n = num(v.value);
-      if(n !== null) out[k] = n;
+      const n = num(v.value); if(n !== null) out[k] = n;
     } else {
-      const n = num(v);
-      if(n !== null) out[k] = n;
+      const n = num(v); if(n !== null) out[k] = n;
     }
     if(v && typeof v === 'object') walk(v,out);
   }
 }
 
 function normalize(payload){
-  const raw = {};
-  walk(payload, raw);
-  const out = {};
+  const raw = {}; walk(payload, raw); const out = {};
   for(const [target, aliases] of Object.entries(keys)){
     for(const alias of aliases){
       if(raw[alias] !== undefined){ out[target] = raw[alias]; break; }
@@ -67,81 +60,57 @@ function normalize(payload){
 }
 
 function clearPing(){ clearInterval(pingTimer); pingTimer = null; }
-
 function connect(){
-  clearTimeout(reconnectTimer);
-  clearPing();
-  const url = TALA_URLS[0];
+  clearTimeout(reconnectTimer); clearPing(); const url = TALA_URLS[0];
   try{
     if(socket) socket.close();
-    socket = new WebSocket(url, { headers: { Origin:'https://www.tala.ir', 'User-Agent':'Mozilla/5.0 NavabGold/1.0' } });
-    socket.on('open', () => {
-      lastError = null;
-      console.log('[TALA LIVE] connected', url);
-      pingTimer = setInterval(() => { try{ if(socket && socket.readyState === WebSocket.OPEN) socket.ping(); }catch{} }, 20000);
+    socket = new WebSocket(url, { headers:{Origin:'https://www.tala.ir','User-Agent':'Mozilla/5.0 NavabGold/1.0'} });
+    socket.on('open',()=>{
+      lastError=null; console.log('[TALA LIVE] connected',url);
+      pingTimer=setInterval(()=>{try{if(socket&&socket.readyState===WebSocket.OPEN)socket.ping();}catch{}},20000);
     });
-    socket.on('message', raw => {
-      messages++;
-      let msg;
-      try { msg = JSON.parse(raw.toString()); } catch { return; }
-      const normalized = normalize(msg);
-      if(Object.keys(normalized).length){
-        liveMarket = { ...(liveMarket || {}), ...normalized };
-        lastLiveAt = Date.now();
-        lastError = null;
-      }
+    socket.on('message',raw=>{
+      messages++; let msg; try{msg=JSON.parse(raw.toString());}catch{return;}
+      const normalized=normalize(msg);
+      if(Object.keys(normalized).length){liveMarket={...(liveMarket||{}),...normalized};lastLiveAt=Date.now();lastError=null;}
     });
-    socket.on('error', e => { lastError = e.message || 'Tala WebSocket error'; });
-    socket.on('close', () => {
-      clearPing();
-      socket = null;
-      reconnectTimer = setTimeout(connect, 2500);
-    });
-  }catch(e){
-    clearPing();
-    lastError = e.message || 'Tala WebSocket connection failed';
-    reconnectTimer = setTimeout(connect, 2500);
-  }
+    socket.on('error',e=>{lastError=e.message||'Tala WebSocket error';});
+    socket.on('close',()=>{clearPing();socket=null;reconnectTimer=setTimeout(connect,2500);});
+  }catch(e){clearPing();lastError=e.message||'Tala WebSocket connection failed';reconnectTimer=setTimeout(connect,2500);}
 }
 connect();
 
 function sendMarket(res){
-  const fresh = !!liveMarket && (Date.now() - lastLiveAt < 90000);
+  const fresh=!!liveMarket&&(Date.now()-lastLiveAt<90000);
   if(!fresh){
-    res.writeHead(503, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+    res.writeHead(503,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
     return res.end(JSON.stringify({ok:false,live:false,source:'Tala.ir WebSocket',updatedAt:lastLiveAt||null,error:lastError||'دریافت قیمت زنده از طلا موقتاً ممکن نشد.'}));
   }
-  res.writeHead(200, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
   res.end(JSON.stringify({ok:true,live:true,source:'Tala.ir WebSocket',updatedAt:lastLiveAt,market:liveMarket}));
 }
 
-const child = spawn(process.execPath, ['server.js'], { env:{...process.env, PORT:String(APP_PORT)}, stdio:'inherit' });
-child.on('exit', code => { if(code !== 0) process.exit(code || 1); });
+const child=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:String(APP_PORT)},stdio:'inherit'});
+child.on('exit',code=>{if(code!==0)process.exit(code||1);});
 
-const proxy = http.createServer((req,res) => {
-  if(req.url && req.url.startsWith('/api/market')) return sendMarket(res);
-  const upstream = http.request({hostname:'127.0.0.1',port:APP_PORT,path:req.url,method:req.method,headers:{...req.headers,host:`127.0.0.1:${APP_PORT}`}}, r => {
-    const isHtml = String(r.headers['content-type'] || '').includes('text/html');
-    if(!isHtml){ res.writeHead(r.statusCode, r.headers); r.pipe(res); return; }
-    const chunks=[];
-    r.on('data', c => chunks.push(c));
-    r.on('end', () => {
-      let html = Buffer.concat(chunks).toString('utf8');
-      // Main production site gets the complete live-price board without changing
-      // its existing design. It is injected only on the public storefront.
-      const isStorefront = req.url === '/' || req.url?.split('?')[0] === '/index.html';
-      if(isStorefront && html.includes('</body>') && !html.includes('/live-prices.js')){
-        html = html.replace('</body>', '<script src="/live-prices.js?v=20260822" defer></script></body>');
+const proxy=http.createServer((req,res)=>{
+  if(req.url&&req.url.startsWith('/api/market'))return sendMarket(res);
+  const upstream=http.request({hostname:'127.0.0.1',port:APP_PORT,path:req.url,method:req.method,headers:{...req.headers,host:`127.0.0.1:${APP_PORT}`}},r=>{
+    const isHtml=String(r.headers['content-type']||'').includes('text/html');
+    if(!isHtml){res.writeHead(r.statusCode,r.headers);r.pipe(res);return;}
+    const chunks=[];r.on('data',c=>chunks.push(c));r.on('end',()=>{
+      let html=Buffer.concat(chunks).toString('utf8');
+      // Keep the original main storefront layout. Only add the compact live-price strip.
+      const isStorefront=req.url==='/'||req.url?.split('?')[0]==='/index.html';
+      if(isStorefront&&html.includes('</body>')&&!html.includes('/market-strip.js')){
+        html=html.replace('</body>','<script src="/market-strip.js?v=20260822" defer></script></body>');
       }
-      const headers = {...r.headers, 'content-length': Buffer.byteLength(html)};
-      delete headers['content-encoding'];
-      res.writeHead(r.statusCode, headers); res.end(html);
+      const headers={...r.headers,'content-length':Buffer.byteLength(html)};delete headers['content-encoding'];
+      res.writeHead(r.statusCode,headers);res.end(html);
     });
   });
-  upstream.on('error', () => { if(!res.headersSent){res.writeHead(502);res.end('Bad gateway');} });
-  req.pipe(upstream);
+  upstream.on('error',()=>{if(!res.headersSent){res.writeHead(502);res.end('Bad gateway');}});req.pipe(upstream);
 });
-proxy.listen(PUBLIC_PORT, '0.0.0.0', () => console.log('[NAVAB] live market proxy listening on', PUBLIC_PORT));
-
-process.on('SIGTERM', () => { try{child.kill('SIGTERM');}catch{}; try{socket?.close();}catch{}; process.exit(0); });
-process.on('SIGINT', () => { try{child.kill('SIGINT');}catch{}; try{socket?.close();}catch{}; process.exit(0); });
+proxy.listen(PUBLIC_PORT,'0.0.0.0',()=>console.log('[NAVAB] live market proxy listening on',PUBLIC_PORT));
+process.on('SIGTERM',()=>{try{child.kill('SIGTERM');}catch{};try{socket?.close();}catch{};process.exit(0);});
+process.on('SIGINT',()=>{try{child.kill('SIGINT');}catch{};try{socket?.close();}catch{};process.exit(0);});
