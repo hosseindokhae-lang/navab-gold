@@ -10,6 +10,7 @@ let liveMarket = null;
 let lastLiveAt = 0;
 let socket = null;
 let reconnectTimer = null;
+let pingTimer = null;
 let lastError = null;
 let messages = 0;
 
@@ -61,13 +62,20 @@ function normalize(payload){
   return out;
 }
 
+function clearPing(){ clearInterval(pingTimer); pingTimer = null; }
+
 function connect(){
   clearTimeout(reconnectTimer);
+  clearPing();
   const url = TALA_URLS[0];
   try{
     if(socket) socket.close();
     socket = new WebSocket(url, { headers: { Origin:'https://www.tala.ir', 'User-Agent':'Mozilla/5.0 NavabGold/1.0' } });
-    socket.on('open', () => { lastError = null; console.log('[TALA LIVE] connected', url); });
+    socket.on('open', () => {
+      lastError = null;
+      console.log('[TALA LIVE] connected', url);
+      pingTimer = setInterval(() => { try{ if(socket && socket.readyState === WebSocket.OPEN) socket.ping(); }catch{} }, 20000);
+    });
     socket.on('message', raw => {
       messages++;
       let msg;
@@ -81,10 +89,12 @@ function connect(){
     });
     socket.on('error', e => { lastError = e.message || 'Tala WebSocket error'; });
     socket.on('close', () => {
+      clearPing();
       socket = null;
       reconnectTimer = setTimeout(connect, 2500);
     });
   }catch(e){
+    clearPing();
     lastError = e.message || 'Tala WebSocket connection failed';
     reconnectTimer = setTimeout(connect, 2500);
   }
