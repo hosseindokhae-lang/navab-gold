@@ -1,0 +1,62 @@
+(() => {
+  const ID = 'navab-market-strip';
+  const nf = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 });
+  const items = [
+    ['usd','دلار آمریکا','تومان'],
+    ['aed','درهم امارات','تومان'],
+    ['cad','دلار کانادا','تومان'],
+    ['eur','یورو','تومان'],
+    ['gbp','پوند انگلیس','تومان'],
+    ['chf','فرانک سوئیس','تومان'],
+    ['cny','یوان چین','تومان'],
+    ['ounceUsd','اونس جهانی','دلار'],
+    ['gram18','طلای ۱۸ عیار','تومان/گرم'],
+    ['gram740','طلای ۷۴۰','تومان/گرم'],
+    ['mazanehJahani','مظنه جهانی','تومان'],
+    ['emami','سکه امامی','تومان'],
+    ['half','نیم سکه','تومان'],
+    ['quarter','ربع سکه','تومان'],
+    ['gerami','سکه گرمی','تومان']
+  ];
+
+  function esc(v){return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function ensure(){
+    let root=document.getElementById(ID);
+    if(root) return root;
+    root=document.createElement('section');
+    root.id=ID;
+    root.dir='rtl';
+    root.innerHTML='<div class="nms-head"><div><span class="nms-dot"></span><b>قیمت‌های لحظه‌ای</b></div><span class="nms-source">منبع: طلا</span></div><div class="nms-track"></div>';
+    const hero=document.querySelector('main section, main > div, main');
+    if(hero && hero.parentNode) hero.parentNode.insertBefore(root, hero.nextSibling);
+    else document.body.prepend(root);
+    return root;
+  }
+  function style(){
+    if(document.getElementById('nms-style')) return;
+    const s=document.createElement('style');s.id='nms-style';
+    s.textContent=`#${ID}{max-width:1180px;margin:14px auto 22px;padding:0 14px;font-family:inherit}#${ID} .nms-head{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 7px;color:#514538;font-size:13px}.nms-head>div{display:flex;align-items:center;gap:7px}.nms-dot{width:7px;height:7px;border-radius:50%;background:#6f8e55;box-shadow:0 0 0 3px rgba(111,142,85,.12)}.nms-source{font-size:10px;color:#8f8477}.nms-track{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border:1px solid rgba(88,73,54,.16);border-radius:15px;background:rgba(255,255,255,.72);box-shadow:0 5px 18px rgba(70,55,40,.05)}.nms-track::-webkit-scrollbar{display:none}.nms-item{flex:0 0 142px;padding:10px 12px;border-left:1px solid rgba(88,73,54,.12);display:flex;flex-direction:column;gap:2px;min-height:67px;justify-content:center}.nms-item:last-child{border-left:0}.nms-name{font-size:10px;color:#75695d}.nms-value{font-size:14px;font-weight:800;color:#30271f;direction:ltr;text-align:right}.nms-unit{font-size:8px;color:#9a9085}.nms-live{font-size:9px;color:#6f8e55;margin-right:5px}@media(max-width:600px){#${ID}{padding:0 10px;margin:10px auto 18px}.nms-item{flex-basis:126px;padding:9px 10px}.nms-value{font-size:13px}}`;
+    document.head.appendChild(s);
+  }
+  function render(m,updatedAt){
+    const root=ensure();
+    const track=root.querySelector('.nms-track');
+    track.innerHTML=items.filter(([k])=>m[k]!=null).map(([k,n,u])=>`<article class="nms-item"><span class="nms-name">${esc(n)}</span><strong class="nms-value">${nf.format(Number(m[k]))}</strong><span class="nms-unit">${esc(u)} <span class="nms-live">زنده</span></span></article>`).join('');
+    root.querySelector('.nms-source').textContent=updatedAt?`طلا • ${new Date(updatedAt).toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit'})}`:'منبع: طلا';
+  }
+  function waiting(){
+    const root=ensure();
+    root.querySelector('.nms-track').innerHTML='<div class="nms-item" style="flex:1"><span class="nms-name">اتصال به نرخ زنده طلا</span><strong class="nms-value">در حال دریافت…</strong><span class="nms-unit">قیمت قدیمی نمایش داده نمی‌شود</span></div>';
+  }
+  async function load(){
+    try{
+      const r=await fetch('/api/market?full=1&t='+Date.now(),{cache:'no-store'});
+      if(!r.ok) throw new Error('market');
+      const d=await r.json();
+      if(!d.live) throw new Error('not-live');
+      render(d.market||{},d.updatedAt);
+    }catch{waiting();}
+  }
+  function start(){style();ensure();load();setInterval(load,30000)}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
