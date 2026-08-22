@@ -43,13 +43,13 @@ const proxy = http.createServer((req, res) => {
         if (!html.includes('/market-strip.js')) {
           html = html.replace(
             '</body>',
-            '<script src="/market-strip.js?v=20260822-3" defer></script></body>'
+            '<script src="/market-strip.js?v=20260823-1" defer></script></body>'
           );
         }
         if (!html.includes('/category-strip.js')) {
           html = html.replace(
             '</body>',
-            '<script src="/category-strip.js?v=20260822-1" defer></script></body>'
+            '<script src="/category-strip.js?v=20260823-2" defer></script></body>'
           );
         }
       }
