@@ -1,5 +1,6 @@
 (() => {
   const ID = 'navab-market-strip';
+  const PRICE_ID = 'navab-bracelet-ranges';
   const nf = new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 });
   const items = [
     ['usd','دلار آمریکا','تومان'],
@@ -19,7 +20,7 @@
     ['gerami','سکه گرمی','تومان']
   ];
 
-  function esc(v){return String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function esc(v){return String(v ?? '').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
   function ensure(){
     let root=document.getElementById(ID);
     if(root) return root;
@@ -32,10 +33,27 @@
     else document.body.prepend(root);
     return root;
   }
+  function ensurePriceRanges(){
+    let root=document.getElementById(PRICE_ID);
+    if(root) return root;
+    root=document.createElement('section');
+    root.id=PRICE_ID;
+    root.dir='rtl';
+    root.innerHTML=`<div class="nbr-head"><div><b>دستبند</b><span>انتخاب بر اساس قیمت</span></div></div><div class="nbr-track">
+      <a class="nbr-card" href="#products"><strong>۱۰ تا ۱۵</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۱۵ تا ۲۰</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۲۰ تا ۳۰</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۳۰ تا ۵۰</strong><span>میلیون تومان</span></a>
+    </div>`;
+    const market=document.getElementById(ID);
+    if(market && market.parentNode) market.parentNode.insertBefore(root, market.nextSibling);
+    else document.body.prepend(root);
+    return root;
+  }
   function style(){
     if(document.getElementById('nms-style')) return;
     const s=document.createElement('style');s.id='nms-style';
-    s.textContent=`#${ID}{max-width:1180px;margin:14px auto 22px;padding:0 14px;font-family:inherit}#${ID} .nms-head{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 7px;color:#514538;font-size:13px}.nms-head>div{display:flex;align-items:center;gap:7px}.nms-dot{width:7px;height:7px;border-radius:50%;background:#6f8e55;box-shadow:0 0 0 3px rgba(111,142,85,.12)}.nms-source{font-size:10px;color:#8f8477}.nms-track{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border:1px solid rgba(88,73,54,.16);border-radius:15px;background:rgba(255,255,255,.72);box-shadow:0 5px 18px rgba(70,55,40,.05)}.nms-track::-webkit-scrollbar{display:none}.nms-item{flex:0 0 142px;padding:10px 12px;border-left:1px solid rgba(88,73,54,.12);display:flex;flex-direction:column;gap:2px;min-height:67px;justify-content:center}.nms-item:last-child{border-left:0}.nms-name{font-size:10px;color:#75695d}.nms-value{font-size:14px;font-weight:800;color:#30271f;direction:ltr;text-align:right}.nms-unit{font-size:8px;color:#9a9085}.nms-live{font-size:9px;color:#6f8e55;margin-right:5px}@media(max-width:600px){#${ID}{padding:0 10px;margin:10px auto 18px}.nms-item{flex-basis:126px;padding:9px 10px}.nms-value{font-size:13px}}`;
+    s.textContent=`#${ID}{max-width:1180px;margin:14px auto 12px;padding:0 14px;font-family:inherit}#${ID} .nms-head{display:flex;justify-content:space-between;align-items:center;padding:8px 4px 7px;color:#514538;font-size:13px}.nms-head>div{display:flex;align-items:center;gap:7px}.nms-dot{width:7px;height:7px;border-radius:50%;background:#6f8e55;box-shadow:0 0 0 3px rgba(111,142,85,.12)}.nms-source{font-size:10px;color:#8f8477}.nms-track{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;border:1px solid rgba(88,73,54,.16);border-radius:15px;background:rgba(255,255,255,.72);box-shadow:0 5px 18px rgba(70,55,40,.05)}.nms-track::-webkit-scrollbar{display:none}.nms-item{flex:0 0 142px;padding:10px 12px;border-left:1px solid rgba(88,73,54,.12);display:flex;flex-direction:column;gap:2px;min-height:67px;justify-content:center}.nms-item:last-child{border-left:0}.nms-name{font-size:10px;color:#75695d}.nms-value{font-size:14px;font-weight:800;color:#30271f;direction:ltr;text-align:right}.nms-unit{font-size:8px;color:#9a9085}.nms-live{font-size:9px;color:#6f8e55;margin-right:5px}#${PRICE_ID}{max-width:1180px;margin:0 auto 18px;padding:0 14px;font-family:inherit}.nbr-head{display:flex;align-items:baseline;justify-content:flex-start;padding:4px 4px 8px;color:#514538}.nbr-head>div{display:flex;align-items:baseline;gap:8px}.nbr-head b{font-size:14px}.nbr-head span{font-size:9px;color:#9a9085}.nbr-track{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 1px}.nbr-track::-webkit-scrollbar{display:none}.nbr-card{flex:0 0 132px;min-height:58px;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(88,73,54,.12);border-radius:13px;background:rgba(255,255,255,.62);box-shadow:0 4px 14px rgba(70,55,40,.04);text-decoration:none;color:#30271f;display:flex;flex-direction:column;justify-content:center;gap:1px;transition:transform .18s ease,box-shadow .18s ease}.nbr-card:active{transform:scale(.98)}.nbr-card strong{font-size:13px;font-weight:800}.nbr-card span{font-size:8px;color:#8f8477}@media(max-width:600px){#${ID}{padding:0 10px;margin:10px auto 8px}.nms-item{flex-basis:126px;padding:9px 10px}.nms-value{font-size:13px}#${PRICE_ID}{padding:0 10px;margin-bottom:14px}.nbr-card{flex-basis:116px;min-height:54px;padding:9px 10px}.nbr-card strong{font-size:12px}}`;
     document.head.appendChild(s);
   }
   function render(m,updatedAt){
@@ -57,6 +75,6 @@
       render(d.market||{},d.updatedAt);
     }catch{waiting();}
   }
-  function start(){style();ensure();load();setInterval(load,30000)}
+  function start(){style();ensure();ensurePriceRanges();load();setInterval(load,30000)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();
