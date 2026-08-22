@@ -14,10 +14,14 @@ let pingTimer = null;
 let lastError = null;
 let messages = 0;
 
+// Keep the full set of market fields exposed by server.js. The live proxy
+// previously exposed only a small subset, which is why CAD and other prices
+// disappeared on production even though the backend knew about them.
 const keys = {
-  gram18: ['geram18','gram18'], gram21: ['geram21','gram21'], gram22: ['geram22','gram22'],
-  gram735: ['geram735','gram735'], gram740: ['geram740','gram740'], gram995: ['geram995','gram995'],
-  gram999: ['geram999','gram999'], usd: ['usd'], eur: ['eur'], gbp: ['gbp'], aed: ['aed'],
+  gram18: ['geram18','gram18'], gram24: ['geram24','gram24'], gram21: ['geram21','gram21'], gram22: ['geram22','gram22'],
+  gram735: ['geram735','gram735'], gram740: ['geram740','gram740'], gram995: ['geram995','gram995'], gram999: ['geram999','gram999'],
+  usd: ['usd'], eur: ['eur'], gbp: ['gbp'], aed: ['aed'], cad: ['cad','CAD','dollarCanada','canadaDollar'],
+  chf: ['chf'], cny: ['cny'], pkr: ['pkr'], omr: ['omr'], try: ['try','TRY'], thb: ['thb'],
   btcUsd: ['BTC_USDT','btcUsd'], ethUsd: ['ETH_USDT','ethUsd'], usdtIrt: ['USDT_IRT','usdtIrt'],
   ounceUsd: ['ounce','ounceUsd'], brentUsd: ['ENERGY_BRENT','brentUsd'], bazartehran: ['bazartehran'],
   mazanehJahani: ['mazaneh-jahani','mazanehJahani'], mazanehDubai: ['mazaneh-dubai','mazanehDubai'],
@@ -81,7 +85,7 @@ function connect(){
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       const normalized = normalize(msg);
-      if(normalized.gram18 || normalized.gram740 || normalized.usd || normalized.ounceUsd){
+      if(Object.keys(normalized).length){
         liveMarket = { ...(liveMarket || {}), ...normalized };
         lastLiveAt = Date.now();
         lastError = null;
@@ -117,7 +121,22 @@ child.on('exit', code => { if(code !== 0) process.exit(code || 1); });
 const proxy = http.createServer((req,res) => {
   if(req.url && req.url.startsWith('/api/market')) return sendMarket(res);
   const upstream = http.request({hostname:'127.0.0.1',port:APP_PORT,path:req.url,method:req.method,headers:{...req.headers,host:`127.0.0.1:${APP_PORT}`}}, r => {
-    res.writeHead(r.statusCode, r.headers); r.pipe(res);
+    const isHtml = String(r.headers['content-type'] || '').includes('text/html');
+    if(!isHtml){ res.writeHead(r.statusCode, r.headers); r.pipe(res); return; }
+    const chunks=[];
+    r.on('data', c => chunks.push(c));
+    r.on('end', () => {
+      let html = Buffer.concat(chunks).toString('utf8');
+      // Main production site gets the complete live-price board without changing
+      // its existing design. It is injected only on the public storefront.
+      const isStorefront = req.url === '/' || req.url?.split('?')[0] === '/index.html';
+      if(isStorefront && html.includes('</body>') && !html.includes('/live-prices.js')){
+        html = html.replace('</body>', '<script src="/live-prices.js?v=20260822" defer></script></body>');
+      }
+      const headers = {...r.headers, 'content-length': Buffer.byteLength(html)};
+      delete headers['content-encoding'];
+      res.writeHead(r.statusCode, headers); res.end(html);
+    });
   });
   upstream.on('error', () => { if(!res.headersSent){res.writeHead(502);res.end('Bad gateway');} });
   req.pipe(upstream);
