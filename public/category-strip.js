@@ -57,7 +57,7 @@
       }).join('')}</div>`;
 
     const ranges = document.getElementById('navab-bracelet-ranges');
-    if (ranges?.parentNode) ranges.parentNode.insertBefore(root, ranges.nextSibling);
+    if (ranges?.parentNode) ranges.parentNode.insertBefore(root, ranges);
     else document.body.prepend(root);
 
     const style = document.createElement('style');
