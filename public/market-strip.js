@@ -39,11 +39,12 @@
     root=document.createElement('section');
     root.id=PRICE_ID;
     root.dir='rtl';
-    root.innerHTML=`<div class="nbr-head"><div><b>دستبند</b><span>انتخاب بر اساس قیمت</span></div></div><div class="nbr-track">
-      <a class="nbr-card" href="#products"><strong>۱۰ تا ۱۵</strong><span>میلیون تومان</span></a>
-      <a class="nbr-card" href="#products"><strong>۱۵ تا ۲۰</strong><span>میلیون تومان</span></a>
+    root.innerHTML=`<div class="nbr-head"><div><b>محصولات بر اساس قیمت</b><span>انتخاب بازه</span></div></div><div class="nbr-track">
+      <a class="nbr-card" href="#products"><strong>۱۰ تا ۲۰</strong><span>میلیون تومان</span></a>
       <a class="nbr-card" href="#products"><strong>۲۰ تا ۳۰</strong><span>میلیون تومان</span></a>
-      <a class="nbr-card" href="#products"><strong>۳۰ تا ۵۰</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۳۰ تا ۴۰</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۴۰ تا ۵۰</strong><span>میلیون تومان</span></a>
+      <a class="nbr-card" href="#products"><strong>۵۰+</strong><span>میلیون تومان</span></a>
     </div>`;
     const market=document.getElementById(ID);
     if(market && market.parentNode) market.parentNode.insertBefore(root, market.nextSibling);
