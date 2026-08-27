@@ -36,22 +36,15 @@ const proxy = http.createServer((req, res) => {
     r.on('end', () => {
       let html = Buffer.concat(chunks).toString('utf8');
 
-      // Only enhance the public main storefront. Admin and preview pages stay untouched.
+      // Only enhance the public main storefront with the live market strip.
+      // Admin and preview pages stay untouched.
       const pathname = String(req.url || '').split('?')[0];
       const isStorefront = pathname === '/' || pathname === '/index.html';
-      if (isStorefront && html.includes('</body>')) {
-        if (!html.includes('/market-strip.js')) {
-          html = html.replace(
-            '</body>',
-            '<script src="/market-strip.js?v=20260823-1" defer></script></body>'
-          );
-        }
-        if (!html.includes('/category-strip.js')) {
-          html = html.replace(
-            '</body>',
-            '<script src="/category-strip.js?v=20260823-2" defer></script></body>'
-          );
-        }
+      if (isStorefront && html.includes('</body>') && !html.includes('/market-strip.js')) {
+        html = html.replace(
+          '</body>',
+          '<script src="/market-strip.js?v=20260823-1" defer></script></body>'
+        );
       }
 
       const headers = { ...r.headers, 'content-length': Buffer.byteLength(html) };
