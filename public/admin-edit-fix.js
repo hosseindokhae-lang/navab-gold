@@ -13,6 +13,28 @@ document.addEventListener('click',save,true);if(document.readyState==='loading')
   async function readProducts(){const r=await fetch('/api/storage/products?t='+Date.now(),{cache:'no-store',headers:apiHeaders()});const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'دریافت محصولات ناموفق بود');const v=j.value;return Array.isArray(v)?v:(typeof v==='string'&&v?JSON.parse(v):[])}
   function compress(file){return new Promise((resolve,reject)=>{const rd=new FileReader();rd.onerror=reject;rd.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=800,scale=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext('2d').drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL('image/jpeg',.65))};img.src=rd.result};rd.readAsDataURL(file)})}
   async function saveProducts(ps){const payload=JSON.stringify(ps);if(payload.length>3300000)throw Error('حجم تصاویر محصولات زیاد است؛ تصویر را کوچک‌تر انتخاب کنید.');const r=await fetch('/api/storage/products',{method:'PUT',headers:apiHeaders(),body:JSON.stringify({value:payload})});const j=await r.json();if(!r.ok||j.ok===false)throw Error(j.error||'ذخیره محصول ناموفق بود');const verify=await readProducts();if(verify.length!==ps.length||String(verify[verify.length-1]?.id)!==String(ps[ps.length-1]?.id))throw Error('ذخیره تأیید نشد؛ اطلاعات پاک نشد.');return verify}
-  window.addProduct=async function(){const $=id=>document.getElementById(id);const name=$('pName')?.value.trim()||'',code=$('pCode')?.value.trim()||'',weight=Number($('pWeight')?.value),karat=Number($('pKarat')?.value),wagePercent=Number($('pWage')?.value),shape=$('pShape')?.value||'ring',badgeRaw=$('pFeatured')?.value||'normal',file=$('pPhoto')?.files?.[0];if(!name||!weight)return alert('نام و وزن را وارد کنید');if(!Number.isFinite(wagePercent)||wagePercent<0)return alert('اجرت را درست وارد کنید');if(!file)return alert('لطفاً تصویر محصول را انتخاب کنید');const notice=$('productNotice');try{if(notice)notice.textContent='در حال ذخیره و تأیید...';const ps=await readProducts();const photo=await compress(file);const product={id:crypto.randomUUID(),name,code,weight,karat,wagePercent,shape,badge:badgeRaw==='normal'?'':badgeRaw,photo,createdAt:Date.now()};const saved=await saveProducts([...ps,product]);window.__navabProducts=saved;['pName','pCode','pWeight','pWage'].forEach(id=>{if($(id))$(id).value=id==='pWage'?'14':''});$('pPhoto').value='';const prev=$('photoPreview');if(prev){prev.src='';prev.classList.add('hidden')}if(notice)notice.textContent='محصول ذخیره و تأیید شد ✓';if(typeof window.loadProducts==='function')await window.loadProducts()}catch(e){if(notice)notice.textContent=e.message||'ذخیره انجام نشد';else alert(e.message||'ذخیره انجام نشد')}};
-})();
+  window.addProduct=async function(){
+    const $=id=>document.getElementById(id);
+    const name=$('pName')?.value.trim()||'',code=$('pCode')?.value.trim()||'',weight=Number($('pWeight')?.value),karat=Number($('pKarat')?.value),wagePercent=Number($('pWage')?.value),shape=$('pShape')?.value||'ring',badgeRaw=$('pFeatured')?.value||'normal',file=$('pPhoto')?.files?.[0];
+    if(!name||!weight)return alert('نام و وزن را وارد کنید');
+    if(!Number.isFinite(wagePercent)||wagePercent<0)return alert('اجرت را درست وارد کنید');
+    if(!file)return alert('لطفاً تصویر محصول را انتخاب کنید');
+    const notice=$('productNotice');
+    try{
+      if(notice)notice.textContent='در حال ذخیره و تأیید...';
+      const ps=await readProducts();
+      const photo=await compress(file);
+      const product={id:crypto.randomUUID(),name,code,weight,karat,wagePercent,shape,badge:badgeRaw==='normal'?'':badgeRaw,photo,createdAt:Date.now()};
+      const saved=await saveProducts([...ps,product]);
+      window.__navabProducts=saved;
+      ['pName','pCode','pWeight','pWage'].forEach(id=>{if($(id))$(id).value=id==='pWage'?'14':''});
+      $('pPhoto').value='';
+      const prev=$('photoPreview');if(prev){prev.src='';prev.classList.add('hidden')}
+      if(notice)notice.textContent='محصول ذخیره و تأیید شد ✓';
+      if(typeof window.loadProducts==='function')await window.loadProducts();
+    }catch(e){
+      if(notice)notice.textContent=e.message||'ذخیره انجام نشد';
+      else alert(e.message||'ذخیره انجام نشد');
+    }
+  };
 })();
