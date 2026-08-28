@@ -1,15 +1,1 @@
-{
-  "name": "navab-gold",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Navab Gold single-site commerce, support and admin dashboard",
-  "scripts": {
-    "start": "node server-live.js"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "ws": "^8.18.3"
-  }
-}
+{"name":"navab-gold","version":"1.0.0","private":true,"description":"Navab Gold single-site commerce, support and admin dashboard","scripts":{"start":"node -r ./persistence-bootstrap.js server-live.js"},"engines":{"node":">=20"},"dependencies":{"ws":"^8.18.3"}}
