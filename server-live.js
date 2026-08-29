@@ -38,12 +38,7 @@ const aliases = {
 
 function numberValue(v) {
   if (v === null || v === undefined || v === '') return null;
-  const s = String(v)
-    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
-    .replace(/[٬،]/g, ',')
-    .replace(/,/g, '')
-    .trim();
+  const s = String(v).replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace(/[٬،]/g, ',').replace(/,/g, '').trim();
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
@@ -54,11 +49,9 @@ function flatten(value, out = {}) {
   for (const [key, val] of Object.entries(value)) {
     const k = String(key).toLowerCase();
     if (val && typeof val === 'object' && 'value' in val) {
-      const n = numberValue(val.value);
-      if (n !== null) out[k] = n;
+      const n = numberValue(val.value); if (n !== null) out[k] = n;
     } else {
-      const n = numberValue(val);
-      if (n !== null) out[k] = n;
+      const n = numberValue(val); if (n !== null) out[k] = n;
       if (val && typeof val === 'object') flatten(val, out);
     }
   }
@@ -66,13 +59,9 @@ function flatten(value, out = {}) {
 }
 
 function normalize(payload) {
-  const flat = flatten(payload);
-  const result = {};
+  const flat = flatten(payload), result = {};
   for (const [target, keys] of Object.entries(aliases)) {
-    for (const key of keys) {
-      const found = flat[String(key).toLowerCase()];
-      if (found !== undefined) { result[target] = found; break; }
-    }
+    for (const key of keys) { const found = flat[String(key).toLowerCase()]; if (found !== undefined) { result[target] = found; break; } }
   }
   return result;
 }
@@ -90,80 +79,39 @@ function connectTala() {
   clearTimeout(reconnectTimer);
   try {
     if (talaSocket) { try { talaSocket.removeAllListeners(); talaSocket.close(); } catch {} }
-    talaSocket = new WebSocket(TALA_WS_URL, {
-      headers: { Origin: 'https://www.tala.ir', 'User-Agent': 'Mozilla/5.0 NavabGold/1.0' },
-      handshakeTimeout: 15000,
-      perMessageDeflate: false
-    });
-    talaSocket.on('open', () => {
-      lastError = null;
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = setInterval(() => { try { if (talaSocket?.readyState === 1) talaSocket.ping(); } catch {} }, 20000);
-    });
+    talaSocket = new WebSocket(TALA_WS_URL, { headers: { Origin: 'https://www.tala.ir', 'User-Agent': 'Mozilla/5.0 NavabGold/1.0' }, handshakeTimeout: 15000, perMessageDeflate: false });
+    talaSocket.on('open', () => { lastError = null; clearInterval(heartbeatTimer); heartbeatTimer = setInterval(() => { try { if (talaSocket?.readyState === 1) talaSocket.ping(); } catch {} }, 20000); });
     talaSocket.on('message', raw => {
       messageCount++;
-      let msg;
-      try { msg = JSON.parse(raw.toString()); } catch { return; }
+      let msg; try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (accept(msg)) return;
-      for (const candidate of [msg?.data, msg?.result, msg?.payload, msg?.data?.data, msg?.data?.result, msg?.data?.payload]) {
-        if (accept(candidate)) break;
-      }
+      for (const candidate of [msg?.data, msg?.result, msg?.payload, msg?.data?.data, msg?.data?.result, msg?.data?.payload]) { if (accept(candidate)) break; }
     });
     talaSocket.on('error', err => { lastError = err?.message || 'Tala WebSocket error'; });
-    talaSocket.on('close', () => {
-      clearInterval(heartbeatTimer);
-      reconnectTimer = setTimeout(connectTala, 3000);
-    });
-  } catch (err) {
-    lastError = err?.message || 'Tala WebSocket connection failed';
-    reconnectTimer = setTimeout(connectTala, 3000);
-  }
+    talaSocket.on('close', () => { clearInterval(heartbeatTimer); reconnectTimer = setTimeout(connectTala, 3000); });
+  } catch (err) { lastError = err?.message || 'Tala WebSocket connection failed'; reconnectTimer = setTimeout(connectTala, 3000); }
 }
 connectTala();
 
-const child = spawn(process.execPath, ['server.js'], {
-  env: { ...process.env, PORT: String(APP_PORT) },
-  stdio: 'inherit'
-});
+const child = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(APP_PORT) }, stdio: 'inherit' });
 child.on('exit', code => { if (code !== 0) process.exit(code || 1); });
 
 const proxy = http.createServer((req, res) => {
   const pathname = String(req.url || '').split('?')[0];
-
-  // Public live prices: do not forward the stale/expired market response from
-  // the child server. Only return data received recently from Tala.
   if (pathname === '/api/market' && req.method === 'GET') {
     const fresh = Boolean(liveMarket && liveAt && Date.now() - liveAt <= LIVE_MAX_AGE_MS);
-    const body = JSON.stringify({
-      ok: fresh,
-      source: 'Tala.ir WebSocket',
-      live: fresh,
-      updatedAt: fresh ? liveAt : null,
-      market: fresh ? liveMarket : {},
-      error: fresh ? null : (lastError || 'No fresh live Tala.ir price message received yet'),
-      debug: { socketConnected: Boolean(talaSocket && talaSocket.readyState === 1), messagesReceived: messageCount, lastPriceUpdateAt: liveAt || null }
-    });
-    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(body);
-    return;
+    const body = JSON.stringify({ ok: fresh, source: 'Tala.ir WebSocket', live: fresh, updatedAt: fresh ? liveAt : null, market: fresh ? liveMarket : {}, error: fresh ? null : (lastError || 'No fresh live Tala.ir price message received yet'), debug: { socketConnected: Boolean(talaSocket && talaSocket.readyState === 1), messagesReceived: messageCount, lastPriceUpdateAt: liveAt || null } });
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); return;
   }
-
-  const upstream = http.request({
-    hostname: '127.0.0.1', port: APP_PORT, path: req.url, method: req.method,
-    headers: { ...req.headers, host: `127.0.0.1:${APP_PORT}` }
-  }, r => {
+  const upstream = http.request({ hostname: '127.0.0.1', port: APP_PORT, path: req.url, method: req.method, headers: { ...req.headers, host: `127.0.0.1:${APP_PORT}` } }, r => {
     const isHtml = String(r.headers['content-type'] || '').includes('text/html');
     if (!isHtml) { res.writeHead(r.statusCode, r.headers); r.pipe(res); return; }
-    const chunks = [];
-    r.on('data', c => chunks.push(c));
+    const chunks = []; r.on('data', c => chunks.push(c));
     r.on('end', () => {
       let html = Buffer.concat(chunks).toString('utf8');
       const isStorefront = pathname === '/' || pathname === '/index.html';
-      if (isStorefront && html.includes('</body>') && !html.includes('/market-strip.js')) {
-        html = html.replace('</body>', '<script src="/market-strip.js?v=20260828-2" defer></script></body>');
-      }
-      const headers = { ...r.headers, 'content-length': Buffer.byteLength(html) };
-      delete headers['content-encoding'];
+      if (isStorefront && html.includes('</body>') && !html.includes('/market-strip.js')) html = html.replace('</body>', '<script src="/market-strip.js?v=20260829" defer></script><script src="/market-fallback.js?v=20260829" defer></script></body>');
+      const headers = { ...r.headers, 'content-length': Buffer.byteLength(html) }; delete headers['content-encoding'];
       res.writeHead(r.statusCode, headers); res.end(html);
     });
   });
