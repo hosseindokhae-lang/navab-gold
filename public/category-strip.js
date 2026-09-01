@@ -1,86 +1,13 @@
 (() => {
-  const ID = 'navab-category-strip';
-  const categories = [
-    ['انگشتر', ['ring','انگشتر']],
-    ['دستبند', ['bracelet','دستبند']],
-    ['گردنبند', ['necklace','گردنبند']],
-    ['گوشواره', ['earring','گوشواره']],
-    ['آویز و پلاک', ['pendant','آویز','پلاک']],
-    ['زنجیر', ['chain','زنجیر']]
-  ];
-  const esc = v => String(v ?? '').replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
-
-  function productMatches(p, keys) {
-    const hay = `${p?.shape || ''} ${p?.category || ''} ${p?.name || ''}`.toLowerCase();
-    return keys.some(k => hay.includes(String(k).toLowerCase()));
-  }
-
-  async function loadProducts() {
-    try {
-      const r = await fetch('/api/storage/products?t=' + Date.now(), { cache: 'no-store' });
-      if (!r.ok) return [];
-      const d = await r.json();
-      const raw = d?.value;
-      if (Array.isArray(raw)) return raw;
-      if (typeof raw === 'string') {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      }
-    } catch {}
-    return [];
-  }
-
-  function fallbackImage(name, index) {
-    const imgs = [...document.querySelectorAll('img')].filter(img => {
-      const src = img.currentSrc || img.src || '';
-      return src && !src.startsWith('data:') && !/logo|icon|avatar|favicon/i.test(src);
-    });
-    const wanted = name.replace(/\s+/g, '');
-    const exact = imgs.find(img => `${img.alt || ''}${img.title || ''}`.replace(/\s+/g, '').includes(wanted));
-    return exact?.currentSrc || exact?.src || imgs[index]?.currentSrc || imgs[index]?.src || '';
-  }
-
-  function start(products) {
-    if (document.getElementById(ID)) return;
-    const root = document.createElement('section');
-    root.id = ID;
-    root.dir = 'rtl';
-    root.innerHTML = `
-      <div class="ncat-head"><b>دسته‌بندی محصولات</b><a href="#products">مشاهده همه</a></div>
-      <div class="ncat-track">${categories.map(([name, keys], i) => {
-        const p = products.find(x => productMatches(x, keys));
-        const src = p?.photo || fallbackImage(name, i);
-        return `<a class="ncat-card" href="#products" data-category="${esc(name)}">
-          <div class="ncat-img">${src ? `<img src="${esc(src)}" alt="${esc(name)}" loading="lazy">` : `<span>${esc(name)}</span>`}</div>
-          <span>${esc(name)}</span>
-        </a>`;
-      }).join('')}</div>`;
-
-    const ranges = document.getElementById('navab-bracelet-ranges');
-    if (ranges?.parentNode) ranges.parentNode.insertBefore(root, ranges);
-    else document.body.prepend(root);
-
-    const style = document.createElement('style');
-    style.id = 'ncat-style';
-    style.textContent = `
-      #${ID}{max-width:1180px;margin:0 auto 18px;padding:0 14px;font-family:inherit}
-      .ncat-head{display:flex;align-items:center;justify-content:space-between;padding:7px 4px 9px;color:#514538}
-      .ncat-head b{font-size:14px}.ncat-head a{font-size:9px;color:#8f8477;text-decoration:none}
-      .ncat-track{display:flex;gap:9px;overflow-x:auto;scrollbar-width:none;padding:0 1px}
-      .ncat-track::-webkit-scrollbar{display:none}
-      .ncat-card{flex:0 0 112px;text-decoration:none;color:#30271f;text-align:center}
-      .ncat-img{height:92px;border-radius:14px;overflow:hidden;background:#eee8e0;border:1px solid rgba(88,73,54,.10);box-shadow:0 4px 14px rgba(70,55,40,.04);display:grid;place-items:center}
-      .ncat-img img{width:100%;height:100%;object-fit:cover;display:block}
-      .ncat-img span{font-size:12px;color:#8a7e70}.ncat-card>span{display:block;margin-top:6px;font-size:10px;font-weight:700}
-      .ncat-card:active{transform:scale(.98)}
-      @media(max-width:600px){#${ID}{padding:0 10px;margin-bottom:14px}.ncat-card{flex-basis:94px}.ncat-img{height:78px}.ncat-card>span{font-size:9px}}
-    `;
-    document.head.appendChild(style);
-  }
-
-  async function boot() {
-    const products = await loadProducts();
-    start(products);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+  const ID='navab-category-strip', RANGE='navab-price-ranges';
+  const categories=[['انگشتر',['ring','انگشتر']],['دستبند',['bracelet','دستبند']],['گردنبند',['necklace','گردنبند']],['گوشواره',['earring','گوشواره']],['آویز و پلاک',['pendant','آویز','پلاک']],['زنجیر',['chain','زنجیر']]];
+  const esc=v=>String(v??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
+  async function get(k){try{const r=await fetch('/api/storage/'+k+'?t='+Date.now(),{cache:'no-store'});const d=await r.json(),v=d.value;return Array.isArray(v)?v:(typeof v==='string'&&v?JSON.parse(v):[])}catch{return[]}}
+  function match(p,keys){const h=(`${p?.shape||''} ${p?.category||''} ${p?.name||''}`).toLowerCase();return keys.some(k=>h.includes(k.toLowerCase()))}
+  function fallback(name,i){const a=[...document.querySelectorAll('img')].filter(x=>x.src&&!/^data:/.test(x.src)&&!/logo|icon|avatar|favicon/i.test(x.src));return a[i]?.src||''}
+  function renderCategories(ps,cs){document.getElementById(ID)?.remove();const root=document.createElement('section');root.id=ID;root.dir='rtl';root.innerHTML=`<div class="ncat-head"><b>دسته‌بندی محصولات</b><a href="#products">مشاهده همه</a></div><div class="ncat-track">${categories.map(([name,keys],i)=>{const c=cs.find(x=>{const h=(`${x?.name||''} ${x?.shape||''} ${x?.slug||''}`).toLowerCase();return keys.some(k=>h.includes(k.toLowerCase()))});const p=ps.find(x=>match(x,keys));const src=c?.image||p?.photo||fallback(name,i);return `<a class="ncat-card" href="#products" data-category="${esc(name)}"><div class="ncat-img">${src?`<img src="${esc(src)}" alt="${esc(name)}" loading="lazy">`:`<span>${esc(name)}</span>`}</div><span>${esc(name)}</span></a>`}).join('')}</div>`;const ranges=document.getElementById(RANGE);if(ranges?.parentNode)ranges.parentNode.insertBefore(root,ranges);else document.body.prepend(root);root.querySelectorAll('.ncat-card').forEach(x=>x.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('navab:category',{detail:{name:x.dataset.category}}))));}
+  function renderRanges(rs){document.getElementById(RANGE)?.remove();if(!Array.isArray(rs)||!rs.length)return;const root=document.createElement('section');root.id=RANGE;root.dir='rtl';root.innerHTML=`<div class="nrange-head"><b>انتخاب بر اساس قیمت</b></div><div class="nrange-track">${rs.map(r=>`<a class="nrange-card" href="#products" data-min="${Number(r.min)||0}" data-max="${r.max==null?'':Number(r.max)}"><div class="nrange-img">${r.image?`<img src="${esc(r.image)}" alt="${esc(r.label)}" loading="lazy">`:'<span>محصولات</span>'}</div><span>${esc(r.label)}</span></a>`).join('')}</div>`;const products=document.getElementById('products');if(products?.parentNode)products.parentNode.insertBefore(root,products);else document.body.appendChild(root);}
+  function style(){if(document.getElementById('ncat-style'))return;const s=document.createElement('style');s.id='ncat-style';s.textContent=`#${ID},#${RANGE}{max-width:1180px;margin:0 auto 14px;padding:0 12px;font-family:inherit}.ncat-head,.nrange-head{display:flex;justify-content:space-between;align-items:center;padding:5px 3px 8px;color:#514538}.ncat-head b,.nrange-head b{font-size:13px}.ncat-head a{font-size:9px;color:#8f8477;text-decoration:none}.ncat-track,.nrange-track{display:flex;gap:9px;overflow-x:auto;scrollbar-width:none}.ncat-track::-webkit-scrollbar,.nrange-track::-webkit-scrollbar{display:none}.ncat-card{flex:0 0 88px;text-decoration:none;color:#30271f;text-align:center}.ncat-img{height:70px;border-radius:12px;overflow:hidden;background:#eee8e0;border:1px solid rgba(88,73,54,.1);display:grid;place-items:center}.ncat-img img,.nrange-img img{width:100%;height:100%;object-fit:cover;display:block}.ncat-img span,.nrange-img span{font-size:10px;color:#8a7e70}.ncat-card>span,.nrange-card>span{display:block;margin-top:5px;font-size:9px;font-weight:700}.nrange-card{flex:0 0 118px;text-decoration:none;color:#30271f;text-align:center}.nrange-img{height:78px;border-radius:13px;overflow:hidden;background:#eee8e0;border:1px solid rgba(88,73,54,.1);display:grid;place-items:center}.nrange-card>span{font-size:9px}@media(max-width:600px){#${ID},#${RANGE}{padding:0 7px}.ncat-card{flex-basis:76px}.ncat-img{height:60px}.nrange-card{flex-basis:100px}.nrange-img{height:66px}}`;document.head.appendChild(s)}
+  async function boot(){const[ps,cs,rs]=await Promise.all([get('products'),get('catalog'),get('priceRanges')]);renderCategories(ps,cs);renderRanges(rs);style()}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
