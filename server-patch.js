@@ -5,6 +5,8 @@ const uploadDir=path.join(root,'uploads');
 function send(res,status,obj){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj));}
 http.createServer=function(handler){return originalCreateServer.call(http,async(req,res)=>{
  try{
+  const originalEnd=res.end.bind(res);
+  res.end=function(chunk,encoding,cb){try{const ct=String(res.getHeader('Content-Type')||'');if(ct.includes('text/html')&&chunk){let html=Buffer.isBuffer(chunk)?chunk.toString('utf8'):String(chunk);if(/\/admin(?:\.html)?(?:\?|$)/.test(String(req.url||''))&&html.includes('</body>')){html=html.replace('</body>','<script src="/admin-image-persistence.js?v=20260908"></script></body>');chunk=html;encoding='utf8';res.setHeader('Content-Length',Buffer.byteLength(html));}}}catch{}return originalEnd(chunk,encoding,cb)};
   const u=new URL(req.url,`http://${req.headers.host||'localhost'}`);
   if(u.pathname==='/api/admin/upload-image'&&req.method==='POST'){
    const auth=String(req.headers.authorization||'');
