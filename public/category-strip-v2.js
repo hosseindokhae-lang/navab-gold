@@ -21,4 +21,6 @@ removeDuplicateRanges();
 root.querySelectorAll('.ncat-card').forEach(x=>x.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('navab:category',{detail:{name:x.dataset.category}}))));
 rr.querySelectorAll('.nrange-card').forEach(x=>{x.addEventListener('click',()=>window.dispatchEvent(new CustomEvent('navab:price-range',{detail:{min:Number(x.dataset.min),max:x.dataset.max===''?null:Number(x.dataset.max)}})))})}
 async function boot(){style();const[ps,cs,rs,s,m]=await Promise.all([get('products'),get('catalog'),get('priceRanges'),get('settings'),fetch('/api/market?full=1&t='+Date.now(),{cache:'no-store'}).then(r=>r.json()).catch(()=>({}))]);let settings={};try{settings=s?.value?JSON.parse(s.value):{}}catch{}render(Array.isArray(ps)?ps:[],Array.isArray(cs)?cs:[],Array.isArray(rs)?rs:[],m?.market||{},settings)}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot()})();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+const lf=document.createElement('script');lf.src='/layout-fix-v3.js?v=20261004';document.head.appendChild(lf);
+})();
